@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>圖片切割工具</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;600;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #f5f4f0;
+    --surface: #ffffff;
+    --surface2: #f0efe9;
+    --border: #e2e0d8;
+    --text: #1a1917;
+    --muted: #7a7870;
+    --accent: #2d2cff;
+    --accent-soft: #eeeeff;
+    --success: #16a34a;
+    --success-soft: #dcfce7;
+    --radius: 16px;
+    --radius-sm: 10px;
+  }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 2rem 1rem 6rem;
+  }
+
+  .wrap { max-width: 960px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
+
+  /* Header */
+  header {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1.5rem 2rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 1rem;
+  }
+  .logo { display: flex; align-items: center; gap: 12px; }
+  .logo-icon {
+    width: 44px; height: 44px;
+    background: var(--text);
+    border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 20px;
+  }
+  .logo h1 { font-size: 18px; font-weight: 800; letter-spacing: -0.5px; }
+  .logo p { font-size: 12px; color: var(--muted); margin-top: 1px; }
+
+  .controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .num-group { display: flex; align-items: center; gap: 6px; }
+  .num-group label { font-size: 12px; color: var(--muted); font-weight: 600; }
+  .num-group input {
+    width: 52px; height: 36px; text-align: center;
+    border: 1px solid var(--border); border-radius: var(--radius-sm);
+    background: var(--surface2); font-family: 'DM Mono', monospace;
+    font-size: 15px; font-weight: 500; color: var(--text);
+    outline: none; transition: border-color .2s;
+  }
+  .num-group input:focus { border-color: var(--accent); }
+
+  btn, button, .btn {
+    font-family: 'DM Sans', sans-serif;
+    font-weight: 600; font-size: 13px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 0 16px; height: 36px;
+    cursor: pointer; background: var(--surface);
+    color: var(--text); transition: all .15s;
+    display: inline-flex; align-items: center; gap: 6px;
+    white-space: nowrap;
+  }
+  button:hover { background: var(--surface2); }
+  button:active { transform: scale(0.97); }
+  button.primary { background: var(--text); color: #fff; border-color: var(--text); }
+  button.primary:hover { background: #333; }
+  button.accent { background: var(--accent); color: #fff; border-color: var(--accent); }
+  button.accent:hover { background: #1a19e0; }
+  button:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+
+  /* Empty state */
+  #empty {
+    border: 1.5px dashed var(--border);
+    border-radius: var(--radius);
+    padding: 5rem 2rem;
+    text-align: center;
+    cursor: pointer;
+    transition: all .2s;
+    background: var(--surface);
+  }
+  #empty:hover { border-color: var(--accent); background: var(--accent-soft); }
+  #empty .icon { font-size: 48px; margin-bottom: 1rem; opacity: 0.3; }
+  #empty p { color: var(--muted); font-size: 15px; font-weight: 600; }
+  #empty small { color: var(--muted); font-size: 12px; opacity: 0.7; }
+
+  /* Preview */
+  #preview-wrap {
+    display: none;
+    background: #1a1917;
+    border-radius: var(--radius);
+    padding: 2rem;
+    align-items: center;
+    justify-content: center;
+    min-height: 300px;
+  }
+  #img-container {
+    position: relative;
+    display: inline-block;
+    user-select: none;
+    box-shadow: 0 8px 40px rgba(0,0,0,0.4);
+  }
+  #pimg { max-width: 100%; max-height: 60vh; display: block; pointer-events: none; }
+  #lines-layer { position: absolute; inset: 0; }
+
+  .h-line-hit {
+    position: absolute; left: 0; right: 0; height: 14px;
+    transform: translateY(-50%); cursor: row-resize; z-index: 10;
+  }
+  .h-line-hit::after {
+    content: ''; position: absolute; inset-x: 0; top: 50%;
+    border-top: 2px dashed rgba(255,255,255,0.7);
+    transform: translateY(-50%); pointer-events: none;
+    transition: border-color .15s;
+  }
+  .h-line-hit:hover::after { border-color: #fff; }
+
+  .v-line-hit {
+    position: absolute; top: 0; bottom: 0; width: 14px;
+    transform: translateX(-50%); cursor: col-resize; z-index: 10;
+  }
+  .v-line-hit::after {
+    content: ''; position: absolute; inset-y: 0; left: 50%;
+    border-left: 2px dashed rgba(255,255,255,0.7);
+    transform: translateX(-50%); pointer-events: none;
+    transition: border-color .15s;
+  }
+  .v-line-hit:hover::after { border-color: #fff; }
+
+  /* Result grid */
+  #result {
+    display: none;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 2rem;
+  }
+  #result h2 { font-size: 16px; font-weight: 800; margin-bottom: 1.25rem; letter-spacing: -0.3px; }
+  #tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 14px; }
+
+  .tile-card {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+    background: var(--surface2);
+    display: flex; flex-direction: column;
+    transition: box-shadow .2s;
+  }
+  .tile-card:hover { box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
+  .tile-img {
+    aspect-ratio: 1; display: flex; align-items: center; justify-content: center;
+    background: #fff; padding: 8px; border-bottom: 1px solid var(--border);
+  }
+  .tile-img img { max-width: 100%; max-height: 100%; object-fit: contain; }
+  .tile-body { padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+  .tile-label { font-size: 10px; color: var(--muted); font-family: 'DM Mono', monospace; text-align: center; }
+  .tile-actions { display: flex; gap: 6px; }
+  .tile-actions button { flex: 1; height: 30px; font-size: 11px; padding: 0 8px; }
+  .link-box {
+    display: none;
+    background: var(--success-soft);
+    border: 1px solid #bbf7d0;
+    border-radius: 8px;
+    padding: 6px 8px;
+    align-items: center;
+    gap: 6px;
+  }
+  .link-box span {
+    font-size: 10px; font-family: 'DM Mono', monospace;
+    color: var(--success); flex: 1;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .link-box button { flex: none; height: 24px; font-size: 10px; padding: 0 8px; }
+
+  /* Toast */
+  #toast {
+    position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%);
+    background: var(--text); color: #fff;
+    padding: 10px 20px; border-radius: 100px;
+    font-size: 13px; font-weight: 600;
+    pointer-events: none; opacity: 0;
+    transition: opacity .25s; z-index: 999;
+    white-space: nowrap; max-width: 90vw;
+    text-overflow: ellipsis; overflow: hidden;
+  }
+  #toast.show { opacity: 1; }
+
+  /* Step hint */
+  .step-hint {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1.25rem 1.75rem;
+    display: flex; align-items: flex-start; gap: 1rem;
+    font-size: 13px; color: var(--muted); line-height: 1.6;
+  }
+  .step-hint .num {
+    min-width: 24px; height: 24px;
+    background: var(--text); color: #fff;
+    border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 800; margin-top: 1px;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="logo">
+      <div class="logo-icon">✂</div>
+      <div>
+        <h1>圖片切割工具</h1>
+        <p>切割 → 上傳 Imgur → 永久短網址</p>
+      </div>
+    </div>
+    <div class="controls">
+      <div class="num-group">
+        <label>列</label>
+        <input type="number" id="rows" value="2" min="1" max="20" oninput="initLines()"/>
+      </div>
+      <div class="num-group">
+        <label>行</label>
+        <input type="number" id="cols" value="5" min="1" max="20" oninput="initLines()"/>
+      </div>
+      <button onclick="document.getElementById('fi').click()">上傳圖片</button>
+      <button class="primary" id="splitBtn" onclick="doSplit()" style="display:none">✂ 立即切割</button>
+    </div>
+    <input type="file" id="fi" accept="image/*" style="display:none" onchange="loadImg(event)"/>
+  </header>
+
+  <div id="empty" onclick="document.getElementById('fi').click()">
+    <div class="icon">🖼</div>
+    <p>點擊上傳圖片</p>
+    <small>支援 JPG、PNG、WebP、GIF</small>
+  </div>
+
+  <div id="preview-wrap">
+    <div id="img-container">
+      <img id="pimg"/>
+      <div id="lines-layer"></div>
+    </div>
+  </div>
+
+  <div id="result">
+    <h2>切割結果</h2>
+    <div id="tiles"></div>
+  </div>
+
+</div>
+
+<div id="toast"></div>
+
+<script>
+const IMGUR_CLIENT_ID = '546c25a59c58ad7';
+
+let imgObj = null, hL = [], vL = [], tileData = [], drag = null;
+
+function toast(msg, ms = 3500) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(el._t);
+  el._t = setTimeout(() => el.classList.remove('show'), ms);
+}
+
+function loadImg(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    const img = new Image();
+    img.onload = () => {
+      imgObj = img;
+      document.getElementById('pimg').src = img.src;
+      document.getElementById('empty').style.display = 'none';
+      document.getElementById('preview-wrap').style.display = 'flex';
+      document.getElementById('splitBtn').style.display = 'inline-flex';
+      document.getElementById('result').style.display = 'none';
+      tileData = [];
+      initLines();
+      toast('圖片已載入，拖曳虛線調整切割位置');
+    };
+    img.src = ev.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+function initLines() {
+  const r = Math.max(1, parseInt(document.getElementById('rows').value) || 2);
+  const c = Math.max(1, parseInt(document.getElementById('cols').value) || 5);
+  hL = Array.from({ length: r + 1 }, (_, i) => (i / r) * 100);
+  vL = Array.from({ length: c + 1 }, (_, i) => (i / c) * 100);
+  renderLines();
+}
+
+function renderLines() {
+  const layer = document.getElementById('lines-layer');
+  layer.innerHTML = '';
+  hL.forEach((p, i) => {
+    if (i === 0 || i === hL.length - 1) return;
+    const el = document.createElement('div');
+    el.className = 'h-line-hit';
+    el.style.top = p + '%';
+    el.addEventListener('mousedown', ev => { ev.preventDefault(); drag = { t: 'h', i }; });
+    layer.appendChild(el);
+  });
+  vL.forEach((p, i) => {
+    if (i === 0 || i === vL.length - 1) return;
+    const el = document.createElement('div');
+    el.className = 'v-line-hit';
+    el.style.left = p + '%';
+    el.addEventListener('mousedown', ev => { ev.preventDefault(); drag = { t: 'v', i }; });
+    layer.appendChild(el);
+  });
+}
+
+document.addEventListener('mousemove', e => {
+  if (!drag) return;
+  const cont = document.getElementById('img-container');
+  const rect = cont.getBoundingClientRect();
+  if (drag.t === 'h') {
+    let p = ((e.clientY - rect.top) / rect.height) * 100;
+    p = Math.max(1, Math.min(99, p));
+    hL[drag.i] = p; hL.sort((a, b) => a - b);
+  } else {
+    let p = ((e.clientX - rect.left) / rect.width) * 100;
+    p = Math.max(1, Math.min(99, p));
+    vL[drag.i] = p; vL.sort((a, b) => a - b);
+  }
+  renderLines();
+});
+document.addEventListener('mouseup', () => drag = null);
+
+function doSplit() {
+  if (!imgObj) return;
+  tileData = [];
+  const cv = document.createElement('canvas');
+  const ctx = cv.getContext('2d');
+  for (let r = 0; r < hL.length - 1; r++) {
+    for (let c = 0; c < vL.length - 1; c++) {
+      const sx = (vL[c] / 100) * imgObj.width, ex = (vL[c + 1] / 100) * imgObj.width;
+      const sy = (hL[r] / 100) * imgObj.height, ey = (hL[r + 1] / 100) * imgObj.height;
+      cv.width = Math.round(ex - sx); cv.height = Math.round(ey - sy);
+      ctx.drawImage(imgObj, sx, sy, cv.width, cv.height, 0, 0, cv.width, cv.height);
+      tileData.push({ dataUrl: cv.toDataURL('image/png'), row: r + 1, col: c + 1, shortUrl: null });
+    }
+  }
+  renderTiles();
+  toast(`已切割成 ${tileData.length} 塊`);
+}
+
+function renderTiles() {
+  const container = document.getElementById('tiles');
+  container.innerHTML = '';
+  document.getElementById('result').style.display = 'block';
+  tileData.forEach((tile, idx) => {
+    const card = document.createElement('div');
+    card.className = 'tile-card';
+    card.innerHTML = `
+      <div class="tile-img"><img src="${tile.dataUrl}"/></div>
+      <div class="tile-body">
+        <div class="tile-label">R${tile.row} · C${tile.col}</div>
+        <div class="tile-actions">
+          <button onclick="dl(${idx})">下載</button>
+          <button class="accent" id="sb_${idx}" onclick="getLink(${idx})">短網址</button>
+        </div>
+        <div class="link-box" id="lb_${idx}">
+          <span id="lt_${idx}"></span>
+          <button onclick="cp(${idx})">複製</button>
+        </div>
+      </div>
+    `;
+    container.appendChild(card);
+  });
+}
+
+function dl(idx) {
+  const a = document.createElement('a');
+  a.href = tileData[idx].dataUrl;
+  a.download = `tile_R${tileData[idx].row}C${tileData[idx].col}.png`;
+  a.click();
+}
+
+async function uploadImage(base64) {
+  // 嘗試方法 1: Imgur (FormData)
+  try {
+    const fd = new FormData();
+    fd.append('image', base64);
+    fd.append('type', 'base64');
+    const res = await fetch('https://api.imgur.com/3/image', {
+      method: 'POST',
+      headers: { 'Authorization': 'Client-ID ' + IMGUR_CLIENT_ID },
+      body: fd
+    });
+    const json = await res.json();
+    if (json.success && json.data?.link) return json.data.link;
+  } catch(e) { console.warn('Imgur FormData 失敗', e); }
+
+  // 嘗試方法 2: Imgur (JSON)
+  try {
+    const res = await fetch('https://api.imgur.com/3/image', {
+      method: 'POST',
+      headers: {
+        'Authorization': 'Client-ID ' + IMGUR_CLIENT_ID,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ image: base64, type: 'base64' })
+    });
+    const json = await res.json();
+    if (json.success && json.data?.link) return json.data.link;
+  } catch(e) { console.warn('Imgur JSON 失敗', e); }
+
+  // 嘗試方法 3: catbox.moe (直接 POST blob)
+  try {
+    const blob = await (await fetch('data:image/png;base64,' + base64)).blob();
+    const fd = new FormData();
+    fd.append('reqtype', 'fileupload');
+    fd.append('fileToUpload', blob, 'image.png');
+    const res = await fetch('https://catbox.moe/user/api.php', { method: 'POST', body: fd });
+    const url = await res.text();
+    if (url.startsWith('http')) return url;
+  } catch(e) { console.warn('catbox 失敗', e); }
+
+  throw new Error('所有圖床上傳失敗，請確認網路連線');
+}
+
+async function shortenUrl(longUrl) {
+  // 嘗試 TinyURL
+  try {
+    const res = await fetch('https://tinyurl.com/api-create.php?url=' + encodeURIComponent(longUrl));
+    const text = await res.text();
+    if (text.startsWith('http')) return text.trim();
+  } catch(e) { console.warn('TinyURL 失敗', e); }
+
+  // 若 TinyURL 失敗，直接回傳原圖網址
+  return longUrl;
+}
+
+async function getLink(idx) {
+  if (tileData[idx].shortUrl) { cp(idx); return; }
+  const btn = document.getElementById(`sb_${idx}`);
+  btn.textContent = '上傳中...'; btn.disabled = true;
+
+  try {
+    const base64 = tileData[idx].dataUrl.split(',')[1];
+
+    toast('正在上傳圖片...');
+    const imgUrl = await uploadImage(base64);
+
+    toast('正在產生短網址...');
+    const shortUrl = await shortenUrl(imgUrl);
+
+    tileData[idx].shortUrl = shortUrl;
+    document.getElementById(`lt_${idx}`).textContent = shortUrl;
+    document.getElementById(`lb_${idx}`).style.display = 'flex';
+    btn.textContent = '✓ 已完成'; btn.disabled = false;
+
+    try { await navigator.clipboard.writeText(shortUrl); toast('✓ 短網址已複製！'); }
+    catch { toast('短網址已產生，請手動複製'); }
+
+  } catch (err) {
+    console.error(err);
+    btn.textContent = '短網址'; btn.disabled = false;
+    toast('❌ ' + err.message);
+  }
+}
+
+function cp(idx) {
+  const url = tileData[idx].shortUrl;
+  if (!url) return;
+  navigator.clipboard.writeText(url)
+    .then(() => toast('✓ 已複製！'))
+    .catch(() => {
+      const el = document.createElement('textarea');
+      el.value = url; document.body.appendChild(el);
+      el.select(); document.execCommand('copy');
+      document.body.removeChild(el);
+      toast('✓ 已複製！');
+    });
+}
+</script>
+</body>
+</html>
